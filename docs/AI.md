@@ -1,145 +1,145 @@
-# PlayChrome — Documentación para AI
+# PlayChrome — Documentation for AI
 
-Este documento describe el proyecto PlayChrome para que cualquier agente de IA pueda entender su estructura, propósito y cómo modificarlo sin romperlo.
+This document describes the PlayChrome project so any AI agent can understand its structure, purpose, and how to modify it without breaking it.
 
-## ¿Qué es PlayChrome?
+## What is PlayChrome?
 
-PlayChrome es un **notebook interactivo** dentro del sidepanel de Chrome que permite ejecutar código **Playwright** directamente contra la página que el usuario tiene abierta. Es como un Jupyter notebook, pero para manipular el DOM del navegador con el Playwright API completo.
+PlayChrome is an **interactive notebook** inside Chrome's sidepanel that lets you execute **Playwright** code directly against the page the user has open. It's like a Jupyter notebook, but for manipulating the browser's DOM with the full Playwright API.
 
-### Caso de uso
+### Use case
 
-Un usuario está en `https://midomini.com/admin/usuarios` y quiere:
-- Extraer datos de una tabla
-- Hacer click en botones
-- Llenar formularios
-- Tomar screenshots
+A user is on `https://mydomain.com/admin/users` and wants to:
+- Extract data from a table
+- Click buttons
+- Fill forms
+- Take screenshots
 
-En vez de abrir DevTools y escribir JavaScript, usa PlayChrome que le da acceso al API completo de Playwright.
+Instead of opening DevTools and writing JavaScript, they use PlayChrome which gives them access to the full Playwright API.
 
-## Estructura del proyecto
+## Project structure
 
 ```
 playchrome/
 ├── manifest.json           → Chrome Extension MV3 manifest
-├── service-worker.js       → Service worker (abre sidepanel)
-├── sidepanel.html          → UI del sidepanel
-├── sidepanel.js            → Lógica del sidepanel (~562 lines)
-├── styles.css              → Tema oscuro
+├── service-worker.js       → Service worker (opens sidepanel)
+├── sidepanel.html          → Sidepanel UI
+├── sidepanel.js            → Sidepanel logic (~562 lines)
+├── styles.css              → Dark theme
 ├── lib/
-│   └── notebook-core.js    → Persistencia de celdas (localStorage)
+│   └── notebook-core.js    → Cell persistence (localStorage)
 ├── server/
-│   ├── package.json        → Dependencias del servidor
-│   ├── index.js            → Servidor WebSocket + Playwright (~240 lines)
+│   ├── package.json        → Server dependencies
+│   ├── index.js            → WebSocket server + Playwright (~240 lines)
 │   └── node_modules/       → playwright-core, ws
 ├── vendor/
 │   └── codemirror/         → CodeMirror 5.65.16 (editor)
 └── docs/
-    ├── ARCHITECTURE.md     → Arquitectura detallada
-    └── AI.md               → Este archivo
+    ├── ARCHITECTURE.md     → Detailed architecture
+    └── AI.md               → This file
 ```
 
-## Convenciones del código
+## Code conventions
 
-### Generales
-- Sin comentarios en el código (a menos que sea estrictamente necesario)
-- Variables en camelCase
-- Funciones asíncronas con `async/await`
-- Errores se limpian con `cleanError()` (strip ANSI codes)
-- Mensajes WebSocket son JSON con campo `type`
+### General
+- No comments in code (unless strictly necessary)
+- camelCase variables
+- Async functions with `async/await`
+- Errors cleaned with `cleanError()` (strip ANSI codes)
+- WebSocket messages are JSON with a `type` field
 
-### Servidor (`server/index.js`)
-- Estado global mutable: `browser`, `activePage`, `chromeProcess`, `wsClients`
-- WebSocket server HTTP en puerto `PORT` (default 3000)
-- Conexión CDP a `http://127.0.0.1:CDP_PORT` (default 9222)
-- Evaluación de código via `new Function('page', 'browser', 'return (async () => { ... })()')`
-- `page` y `browser` son variables globales disponibles en toda celda. `page` = pestaña activa, `browser` = BrowserContext.
-- `prepareUserCode()` remueve `let/const/var/function/class` del inicio de línea para que las variables persistan como globales entre celdas (tipo Jupyter).
-- NO usa `eval()` — usa `new Function()` que es menos restrictivo
-- Console.log de página capturado via `page.on('console')`
-- Console.log de servidor capturado via override temporal de `console.log`
+### Server (`server/index.js`)
+- Mutable global state: `browser`, `activePage`, `chromeProcess`, `wsClients`
+- HTTP WebSocket server on port `PORT` (default 3000)
+- CDP connection to `http://127.0.0.1:CDP_PORT` (default 9222)
+- Code evaluation via `new Function('page', 'browser', 'return (async () => { ... })()')`
+- `page` and `browser` are global variables available in every cell. `page` = active tab, `browser` = BrowserContext.
+- `prepareUserCode()` removes `let/const/var/function/class` from the start of lines so variables persist as globals between cells (Jupyter-like).
+- Does NOT use `eval()` — uses `new Function()` which is less restrictive
+- Page console.log captured via `page.on('console')`
+- Server console.log captured via temporary override of `console.log`
 
-### Extensión (`sidepanel.js`)
-- WebSocket client con reconnect manual
-- Celdas del notebook: CodeMirror 5 con hinting custom
-- Notebook persistido en localStorage via `lib/notebook-core.js`
-- Resultados renderizados como HTML en `.cell-output`
-- `evalPending` Map para correlacionar requests/responses
+### Extension (`sidepanel.js`)
+- WebSocket client with manual reconnect
+- Notebook cells: CodeMirror 5 with custom hinting
+- Notebook persisted in localStorage via `lib/notebook-core.js`
+- Results rendered as HTML in `.cell-output`
+- `evalPending` Map to correlate requests/responses
 
 ### Extension Service Worker (`service-worker.js`)
-- Mínimo: solo abre el sidepanel al hacer click en el icono
+- Minimal: only opens the sidepanel when clicking the icon
 
-## Reglas críticas
+## Critical rules
 
-### NO hacer
-1. **NO matar Chrome** — el servidor nunca debe matar procesos de Chrome
-2. **NO auto-lanzar Chrome** — el usuario lanza Chrome manualmente con el comando provisto
-3. **NO usar `eval()` en la extensión** — MV3 no permite `unsafe-eval`. `new Function()` solo en el servidor
-4. **NO cambiar el `--user-data-dir` por defecto** — Chrome 149 requiere uno no-default para CDP; usar `~/.playchrome` con symlinks
-5. **NO asumir que Chrome está en una ruta específica** — validar con `fs.existsSync()`
+### DO NOT
+1. **DO NOT kill Chrome** — the server must never kill Chrome processes
+2. **DO NOT auto-launch Chrome** — the user launches Chrome manually with the provided command
+3. **DO NOT use `eval()` in the extension** — MV3 does not allow `unsafe-eval`. `new Function()` only on the server
+4. **DO NOT change the default `--user-data-dir`** — Chrome 149 requires a non-default one for CDP; use `~/.playchrome` with symlinks
+5. **DO NOT assume Chrome is at a specific path** — validate with `fs.existsSync()`
 
-### Sí hacer
-1. Limpiar errores con `cleanError()` antes de enviar al cliente
-2. Timeout en conexiones CDP (8s) para no colgar el servidor
-3. Capturar console.log de ambos lados (page + server)
-4. Restaurar console.log original en el `finally` de evaluate()
-5. Cerrar browser anterior antes de reconectar en `connectToChrome()`
-6. Crear `~/.playchrome` con symlinks en el startup
+### DO
+1. Clean errors with `cleanError()` before sending to the client
+2. Timeout on CDP connections (8s) to not hang the server
+3. Capture console.log from both sides (page + server)
+4. Restore original console.log in the `finally` of evaluate()
+5. Close previous browser before reconnecting in `connectToChrome()`
+6. Create `~/.playchrome` with symlinks on startup
 
-## Cómo modificar el proyecto
+## How to modify the project
 
-### Agregar un nuevo tipo de mensaje WebSocket
+### Add a new WebSocket message type
 
-**Servidor** (`server/index.js`):
-1. Agregar case en `handleMessage()` switch
-2. Implementar la lógica
-3. Enviar respuesta con `ws.send(JSON.stringify({ type: 'NUEVO_TIPO', ... }))`
+**Server** (`server/index.js`):
+1. Add case in `handleMessage()` switch
+2. Implement the logic
+3. Send response with `ws.send(JSON.stringify({ type: 'NEW_TYPE', ... }))`
 
-**Extensión** (`sidepanel.js`):
-1. Enviar mensaje con `sendToServer({ type: 'NUEVO_TIPO', id, ... })`
-2. Agregar case en `handleServerMessage()` switch
-3. Procesar respuesta
+**Extension** (`sidepanel.js`):
+1. Send message with `sendToServer({ type: 'NEW_TYPE', id, ... })`
+2. Add case in `handleServerMessage()` switch
+3. Process response
 
-### Agregar un hint de autocomplete
+### Add an autocomplete hint
 
-En `sidepanel.js::makeHint()`, array `hints`:
+In `sidepanel.js::makeHint()`, array `hints`:
 ```javascript
 const hints = [
-  // ... existentes
-  'page.nuevoMetodo',  // <-- agregar aquí
+  // ... existing
+  'page.newMethod',  // <-- add here
 ]
 ```
 
-### Cambiar el puerto CDP
+### Change the CDP port
 
 ```bash
 CDP_PORT=9223 node server/index.js
 ```
 
-### Soportar otro navegador
+### Support another browser
 
-En `server/index.js`, cambiar `chromium` por `firefox` o `webkit` de `playwright-core`:
+In `server/index.js`, change `chromium` to `firefox` or `webkit` from `playwright-core`:
 ```javascript
 const { chromium, firefox, webkit } = require('playwright-core')
-// Usar firefox.connectOverCDP(cdpUrl)
+// Use firefox.connectOverCDP(cdpUrl)
 ```
 
-### Soportar Linux
+### Support Linux
 
-Cambiar `CHROME_PATH`:
+Change `CHROME_PATH`:
 ```javascript
 const CHROME_PATH = '/usr/bin/google-chrome'  // Linux
 const CHROME_DIR = path.join(process.env.HOME || '', '.config/google-chrome')
 ```
 
-## Pruebas
+## Testing
 
-El proyecto no tiene test suite formal. Para probar:
+The project doesn't have a formal test suite. To test:
 
 ```bash
-# Probar servidor
+# Test server
 node server/index.js
 
-# En otra terminal, probar conexión WebSocket:
+# In another terminal, test WebSocket connection:
 node -e '
 const WebSocket = require("ws");
 const ws = new WebSocket("ws://127.0.0.1:3000");
@@ -147,7 +147,7 @@ ws.on("open", () => ws.send(JSON.stringify({type:"CONNECT", id:"test"})));
 ws.on("message", (d) => { console.log(JSON.parse(d)); ws.close(); });
 '
 
-# Probar EVAL (después de conectar Chrome con CDP):
+# Test EVAL (after connecting Chrome with CDP):
 node -e '
 const WebSocket = require("ws");
 const ws = new WebSocket("ws://127.0.0.1:3000");
@@ -161,27 +161,27 @@ ws.on("message", (d) => {
 '
 ```
 
-## Perfiles de Chrome
+## Chrome profiles
 
-El servidor detecta perfiles en `~/Library/Application Support/Google/Chrome/` filtrando por nombre `Default` o `Profile N`. Lee `Preferences` → `profile.name` para el nombre visible.
+The server detects profiles in `~/Library/Application Support/Google/Chrome/` by filtering for names `Default` or `Profile N`. It reads `Preferences` → `profile.name` for the visible name.
 
-**IMPORTANTE**: Cada perfil tiene un `--profile-directory` distinto. No confundir el nombre visible (ej. "Personal") con el nombre del directorio (ej. "Profile 2").
+**IMPORTANT**: Each profile has a different `--profile-directory`. Do not confuse the visible name (e.g. "Personal") with the directory name (e.g. "Profile 2").
 
-## Chrome 149+ y CDP
+## Chrome 149+ and CDP
 
-Chrome 149 introdujo un cambio: `--remote-debugging-port` **no funciona** con el `--user-data-dir` por defecto. El servidor resuelve esto:
-1. Crea `~/.playchrome/` en startup
-2. Symlink de los perfiles reales ahí dentro
-3. El usuario lanza Chrome apuntando a `~/.playchrome`
+Chrome 149 introduced a change: `--remote-debugging-port` **does not work** with the default `--user-data-dir`. The server solves this:
+1. Creates `~/.playchrome/` on startup
+2. Symlinks the real profiles inside it
+3. The user launches Chrome pointing to `~/.playchrome`
 
-Si en el futuro Chrome revierte esto, se puede eliminar `initPlayChromeDir()` y usar directamente `CHROME_DIR`.
+If Chrome reverts this in the future, you can remove `initPlayChromeDir()` and use `CHROME_DIR` directly.
 
-## Glosario
+## Glossary
 
-| Término | Significado |
-|---------|-------------|
-| CDP | Chrome DevTools Protocol — protocolo para controlar Chrome programáticamente |
-| `connectOverCDP` | Método de Playwright que conecta a un Chrome ya iniciado via CDP |
-| Browser Context | Aislamiento de sesiones en Playwright (equivalente a una ventana de incógnito) |
-| Sidepanel | Panel lateral de Chrome Extension MV3 |
-| MV3 | Manifest V3 — versión actual del modelo de extensiones Chrome |
+| Term | Meaning |
+|------|---------|
+| CDP | Chrome DevTools Protocol — protocol for programmatically controlling Chrome |
+| `connectOverCDP` | Playwright method that connects to an already running Chrome via CDP |
+| Browser Context | Session isolation in Playwright (equivalent to an incognito window) |
+| Sidepanel | Chrome Extension MV3 side panel |
+| MV3 | Manifest V3 — current version of the Chrome extensions model |

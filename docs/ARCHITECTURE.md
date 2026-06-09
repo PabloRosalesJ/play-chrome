@@ -1,91 +1,91 @@
-# Arquitectura de PlayChrome
+# PlayChrome Architecture
 
-## Visión general
+## Overview
 
-PlayChrome es un notebook REPL en el sidepanel de Chrome que ejecuta código Playwright real contra la página activa del navegador. La extensión se comunica via WebSocket con un servidor Node.js local que se conecta a Chrome mediante Chrome DevTools Protocol (CDP).
+PlayChrome is a REPL notebook in Chrome's sidepanel that executes real Playwright code against the browser's active page. The extension communicates via WebSocket with a local Node.js server that connects to Chrome through the Chrome DevTools Protocol (CDP).
 
-## Componentes
+## Components
 
-### 1. Extensión Chrome (MV3)
+### 1. Chrome Extension (MV3)
 
 ```
 manifest.json          → Manifest V3, permissions: sidePanel, storage
-service-worker.js       → Abre el sidepanel al hacer click en el icono
-sidepanel.html          → UI principal (toolbar, celdas, footer)
-sidepanel.js            → Lógica: WebSocket, celdas, autocomplete, resultados
-lib/notebook-core.js    → CRUD de celdas, persistencia en localStorage
-styles.css              → Tema oscuro, estilos de celdas/outputs/toasts
+service-worker.js       → Opens the sidepanel when clicking the icon
+sidepanel.html          → Main UI (toolbar, cells, footer)
+sidepanel.js            → Logic: WebSocket, cells, autocomplete, results
+lib/notebook-core.js    → Cell CRUD, localStorage persistence
+styles.css              → Dark theme, cell/output/toast styles
 vendor/codemirror/      → CodeMirror 5.65.16 (core, JS mode, hint addon)
 ```
 
-#### Flujo de la extensión
+#### Extension flow
 
-1. `service-worker.js` — al hacer click en el icono, abre el sidepanel via `chrome.sidePanel.open()`
-2. `sidepanel.html` carga los scripts en orden: CodeMirror → notebook-core → sidepanel.js
-3. `sidepanel.js::init()` — restaura celdas del notebook, bindea eventos del toolbar
-4. Usuario click **Connect** → WebSocket a `ws://127.0.0.1:3000`
-5. Al abrir WebSocket, envía `{ type: 'CONNECT' }` al servidor
-6. Si Chrome CDP no está disponible, servidor responde con ERROR → la extensión muestra `chrome-launcher` con instrucciones
-7. Si CONNECT exitoso, servidor responde `{ type: 'CONNECTED', pages: [...] }`
-8. La extensión rellena el `#page-selector` con las páginas/tabs disponibles
-9. Usuario elige una página del selector → envía `{ type: 'SELECT_PAGE', index }`
-10. Usuario escribe código en una celda CodeMirror y click ▶ o `Ctrl+Enter`
-11. La extensión envía `{ type: 'EVAL', id, code }` al servidor
-12. Servidor ejecuta el código con Playwright, devuelve `{ type: 'RESULT', id, result }`
-13. La extensión renderiza el resultado en el output de la celda
+1. `service-worker.js` — on icon click, opens the sidepanel via `chrome.sidePanel.open()`
+2. `sidepanel.html` loads scripts in order: CodeMirror → notebook-core → sidepanel.js
+3. `sidepanel.js::init()` — restores notebook cells, binds toolbar events
+4. User clicks **Connect** → WebSocket to `ws://127.0.0.1:3000`
+5. On WebSocket open, sends `{ type: 'CONNECT' }` to the server
+6. If Chrome CDP is unavailable, server responds with ERROR → extension shows `chrome-launcher` with instructions
+7. If CONNECT succeeds, server responds `{ type: 'CONNECTED', pages: [...] }`
+8. Extension populates `#page-selector` with available pages/tabs
+9. User selects a page from the dropdown → sends `{ type: 'SELECT_PAGE', index }`
+10. User writes code in a CodeMirror cell and clicks ▶ or `Ctrl+Enter`
+11. Extension sends `{ type: 'EVAL', id, code }` to the server
+12. Server executes the code with Playwright, returns `{ type: 'RESULT', id, result }`
+13. Extension renders the result in the cell's output area
 
-#### Mensajes WebSocket
+#### WebSocket messages
 
-| Tipo (cliente → servidor) | Descripción |
-|--------------------------|-------------|
-| `CONNECT` | Conectar a Chrome via CDP |
-| `EVAL { id, code }` | Ejecutar código Playwright |
-| `LIST_PAGES { id }` | Listar páginas/tabs activas |
-| `SELECT_PAGE { id, index }` | Seleccionar página activa |
-| `GET_PROFILES { id }` | Listar perfiles de Chrome |
+| Type (client → server) | Description |
+|------------------------|-------------|
+| `CONNECT` | Connect to Chrome via CDP |
+| `EVAL { id, code }` | Execute Playwright code |
+| `LIST_PAGES { id }` | List active pages/tabs |
+| `SELECT_PAGE { id, index }` | Select active page |
+| `GET_PROFILES { id }` | List Chrome profiles |
 | `PING { id }` | Health check |
 
-| Tipo (servidor → cliente) | Descripción |
-|--------------------------|-------------|
-| `CONNECTED { pages }` | Conexión exitosa, lista de páginas |
-| `RESULT { id, result }` | Resultado de evaluación |
+| Type (server → client) | Description |
+|------------------------|-------------|
+| `CONNECTED { pages }` | Successful connection, page list |
+| `RESULT { id, result }` | Evaluation result |
 | `ERROR { id, error }` | Error |
-| `PROFILES { id, profiles }` | Lista de perfiles detectados |
-| `PAGES { id, pages }` | Lista de páginas actualizada |
-| `PAGE_SELECTED { id, index }` | Página seleccionada |
+| `PROFILES { id, profiles }` | Detected profiles list |
+| `PAGES { id, pages }` | Updated page list |
+| `PAGE_SELECTED { id, index }` | Selected page confirmation |
 | `PONG { id }` | Health check response |
 
-### 2. Servidor Node.js
+### 2. Node.js Server
 
 ```
 server/
-  package.json       → Dependencias: playwright-core, ws
-  index.js           → Servidor HTTP + WebSocket, conexión CDP, evaluación de código
+  package.json       → Dependencies: playwright-core, ws
+  index.js           → HTTP + WebSocket server, CDP connection, code evaluation
 ```
 
-#### Archivo: `server/index.js`
+#### File: `server/index.js`
 
-**Responsabilidades:**
-- Servir WebSocket en `ws://127.0.0.1:3000`
-- Conectar a Chrome via `playwright-core.chromium.connectOverCDP()`
-- Ejecutar código JavaScript arbitrario usando `new Function()`
-- Detectar perfiles de Chrome en `~/Library/Application Support/Google/Chrome/`
-- Inicializar `~/.playchrome` con symlinks a los perfiles reales
+**Responsibilities:**
+- Serve WebSocket at `ws://127.0.0.1:3000`
+- Connect to Chrome via `playwright-core.chromium.connectOverCDP()`
+- Execute arbitrary JavaScript code using `new Function()`
+- Detect Chrome profiles in `~/Library/Application Support/Google/Chrome/`
+- Initialize `~/.playchrome` with symlinks to real profiles
 
-**Funciones principales:**
+**Main functions:**
 
-| Función | Descripción |
-|---------|-------------|
-| `getProfiles()` | Escanea `CHROME_DIR` en busca de subdirectorios `Default` / `Profile N`, lee `Preferences` para obtener nombre visible |
-| `initPlayChromeDir()` | Crea `PLAYCHROME_DIR` (`~/.playchrome`) y crea symlinks a los perfiles reales de Chrome |
-| `getChromeCommand(profile)` | Genera el comando shell para lanzar Chrome con un perfil específico y CDP habilitado |
-| `connectToChrome()` | Cierra conexión anterior (si existe), conecta via `chromium.connectOverCDP()` a `http://127.0.0.1:9222` |
-| `getPagesInfo()` | Obtiene lista de páginas abiertas del primer browser context |
-| `selectPage(index)` | Cambia la página activa |
-| `evaluate(code)` | Ejecuta código en el servidor con acceso a `page` y `browser`, captura console.log de página y servidor |
-| `handleMessage(ws, msg)` | Router de mensajes WebSocket |
+| Function | Description |
+|----------|-------------|
+| `getProfiles()` | Scans `CHROME_DIR` for subdirectories `Default` / `Profile N`, reads `Preferences` for the visible name |
+| `initPlayChromeDir()` | Creates `PLAYCHROME_DIR` (`~/.playchrome`) and symlinks to real Chrome profiles |
+| `getChromeCommand(profile)` | Generates the shell command to launch Chrome with a specific profile and CDP enabled |
+| `connectToChrome()` | Closes previous connection (if any), connects via `chromium.connectOverCDP()` to `http://127.0.0.1:9222` |
+| `getPagesInfo()` | Gets the list of open pages from the first browser context |
+| `selectPage(index)` | Switches the active page |
+| `evaluate(code)` | Executes code on the server with access to `page` and `browser`, captures page and server console.log |
+| `handleMessage(ws, msg)` | WebSocket message router |
 
-**Evaluación de código:**
+**Code evaluation:**
 ```javascript
 const fn = new Function('page', 'browser', `
   return (async () => {
@@ -95,81 +95,88 @@ const fn = new Function('page', 'browser', `
 const raw = await fn(activePage, browser)
 ```
 
-El código corre en Node.js con las variables `page` (Playwright Page) y `browser` (Playwright Browser) inyectadas. Para operar en el contexto de la página web, usar `page.evaluate()`.
+The code runs in Node.js with the variables `page` (Playwright Page) and `browser` (Playwright Browser) injected. To operate in the web page context, use `page.evaluate()`.
 
-**Captura de console:**
-- Page-side: `page.on('console')` captura mensajes de `console.log` dentro de `page.evaluate()`
-- Server-side: override temporal de `console.log`/`warn`/`error` para capturar logs del código del usuario
-- Ambos se combinan y devuelven con el resultado
+**Global variables across all cells (Jupyter-like behavior):**
+- `page` — the active Chrome tab. Created by the server via `connectOverCDP` on CONNECT.
+- `browser` — the Playwright BrowserContext.
+- `console.log()`, `console.warn()`, `console.error()` — captured and displayed in the output.
+- `sleep(ms)` — utility for pauses in async code (`await sleep(500)`).
+- Any variable declared with `let`/`const`/`var`/`function`/`class` in a cell persists as a global for subsequent cells (the server removes `let/const/var` from the start of lines and converts them to global assignments via `new Function()` in sloppy mode).
 
-### 3. Conexión CDP
+**Console capture:**
+- Page-side: `page.on('console')` captures `console.log` messages inside `page.evaluate()`
+- Server-side: temporary override of `console.log`/`warn`/`error` to capture user code logs
+- Both are combined and returned with the result
 
-Chrome debe iniciarse con:
+### 3. CDP Connection
+
+Chrome must be started with:
 - `--remote-debugging-port=9222`
-- `--remote-allow-origins="*"` (requerido Chrome 112+)
-- `--user-data-dir=<ruta-no-default>` (requerido Chrome 149+)
+- `--remote-allow-origins="*"` (required Chrome 112+)
+- `--user-data-dir=<non-default-path>` (required Chrome 149+)
 
-Playwright se conecta via `chromium.connectOverCDP('http://127.0.0.1:9222')` que internamente:
-1. Hace GET a `http://127.0.0.1:9222/json/version` para obtener el WebSocket URL
-2. Conecta via WebSocket al endpoint CDP
-3. Expone `browser.contexts()` y `context.pages()` con las páginas existentes
+Playwright connects via `chromium.connectOverCDP('http://127.0.0.1:9222')` which internally:
+1. GETs `http://127.0.0.1:9222/json/version` to get the WebSocket URL
+2. Connects via WebSocket to the CDP endpoint
+3. Exposes `browser.contexts()` and `context.pages()` with existing pages
 
-### 4. Manejo de perfiles
+### 4. Profile management
 
-Chrome 149+ **no permite** `--remote-debugging-port` con el `--user-data-dir` por defecto (`~/Library/Application Support/Google/Chrome`). Solución:
+Chrome 149+ **does not allow** `--remote-debugging-port` with the default `--user-data-dir` (`~/Library/Application Support/Google/Chrome`). Solution:
 
-1. El servidor crea `~/.playchrome/` en el startup
-2. Crea symlinks de los perfiles reales (Default, Profile 1, etc.) dentro de `~/.playchrome/`
-3. El usuario lanza Chrome con `--user-data-dir=$HOME/.playchrome --profile-directory="Profile 1"`
-4. Chrome ve un `--user-data-dir` no-default y permite CDP
-5. Los datos del perfil se leen del symlink → es el perfil real del usuario
+1. The server creates `~/.playchrome/` on startup
+2. Creates symlinks of the real profiles (Default, Profile 1, etc.) inside `~/.playchrome/`
+3. The user launches Chrome with `--user-data-dir=$HOME/.playchrome --profile-directory="Profile 1"`
+4. Chrome sees a non-default `--user-data-dir` and allows CDP
+5. Profile data is read from the symlink → it's the user's real profile
 
-## Flujo de datos
+## Data flow
 
 ```
-Usuario escribe código en celda CodeMirror
-  → click ▶ o Ctrl+Enter
+User writes code in CodeMirror cell
+  → click ▶ or Ctrl+Enter
     → sidepanel.js::executeCell(cellId)
       → validate connected + ws open
       → sidepanel.js::evaluateOnServer(code)
-        → envía { type: 'EVAL', id, code } via WebSocket
+        → sends { type: 'EVAL', id, code } via WebSocket
           → server/index.js::handleMessage()
             → server/index.js::evaluate(code)
               → new Function('page', 'browser', 'return (async () => { ... })()')
-                → Playwright ejecuta en Chrome real
-              → captura console.log (page + server)
-              → devuelve { value, console }
-            → envía { type: 'RESULT', id, result } via WebSocket
+                → Playwright executes on real Chrome
+              → captures console.log (page + server)
+              → returns { value, console }
+            → sends { type: 'RESULT', id, result } via WebSocket
           → sidepanel.js::handleServerMessage()
             → resolvePending(msg)
               → sidepanel.js::formatResult()
                 → sidepanel.js::renderOutput()
-                  → Renderiza en .cell-output
+                  → Renders in .cell-output
 ```
 
-## Dependencias
+## Dependencies
 
-### Servidor (`server/package.json`)
-- `playwright-core` ^1.52.0 — sin browser binaries (usa `connectOverCDP`)
+### Server (`server/package.json`)
+- `playwright-core` ^1.52.0 — no browser binaries (uses `connectOverCDP`)
 - `ws` ^8.18.0 — WebSocket server
 
-### Extensión (vendors)
-- CodeMirror 5.65.16 — editor de código en las celdas
-- Sin dependencias externas de npm o bundlers
+### Extension (vendors)
+- CodeMirror 5.65.16 — code editor for cells
+- No external npm dependencies or bundlers
 
-## Variables de entorno
+## Environment variables
 
-| Variable | Default | Propósito |
-|----------|---------|-----------|
-| `PORT` | `3000` | Puerto del servidor WebSocket |
-| `CDP_PORT` | `9222` | Puerto CDP de Chrome |
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PORT` | `3000` | WebSocket server port |
+| `CDP_PORT` | `9222` | Chrome CDP port |
 
-## Constantes del servidor
+## Server constants
 
 ```javascript
 CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 CHROME_DIR = '~/Library/Application Support/Google/Chrome'
 PLAYCHROME_DIR = '~/.playchrome'
 CDP_TIMEOUT = 8000       // ms
-CONSOLE_DELAY = 80       // ms — espera para capturar console.log
+CONSOLE_DELAY = 80       // ms — wait time to capture console.log
 ```

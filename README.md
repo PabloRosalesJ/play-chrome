@@ -1,80 +1,80 @@
 # PlayChrome
 
-Chrome extension sidepanel notebook para manipular el DOM de cualquier página usando **Playwright real** via WebSocket.
+Chrome extension sidepanel notebook to manipulate the DOM of any page using **real Playwright** via WebSocket.
 
-## Requisitos
+## Requirements
 
-| Requisito | Versión | Notas |
-|-----------|---------|-------|
-| **Sistema operativo** | macOS (Apple Silicon o Intel) | Linux compatible con cambios en rutas (ver docs) |
-| **Google Chrome** | 149+ | Canary, Dev, Beta o Stable |
-| **Node.js** | 20+ | Incluye npm |
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| **Operating System** | macOS (Apple Silicon or Intel) | Linux compatible with path changes (see docs) |
+| **Google Chrome** | 149+ | Canary, Dev, Beta or Stable |
+| **Node.js** | 20+ | Includes npm |
 
-> **Playwright**: No necesitas instalar browsers (`npx playwright install`). El servidor usa `playwright-core` que se conecta a tu Chrome ya instalado via CDP — no descarga browsers adicionales.
+> **Playwright**: You don't need to install browsers (`npx playwright install`). The server uses `playwright-core` which connects to your already installed Chrome via CDP — no additional browsers are downloaded.
 
-## Instalación
+## Installation
 
-### 1. Instalar Node.js (si no lo tienes)
+### 1. Install Node.js (if you don't have it)
 
 ```bash
-# Opción A — Homebrew (recomendado)
+# Option A — Homebrew (recommended)
 brew install node
 
-# Opción B — nvm (si necesitas múltiples versiones)
+# Option B — nvm (if you need multiple versions)
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
 nvm install 22
 
-# Opción C — Descargar desde https://nodejs.org (v20 LTS o superior)
+# Option C — Download from https://nodejs.org (v20 LTS or higher)
 ```
 
-Verifica:
+Verify:
 ```bash
-node --version   # → v20.x.x o superior
-npm --version    # → 10.x.x o superior
+node --version   # → v20.x.x or higher
+npm --version    # → 10.x.x or higher
 ```
 
-### 2. Clonar e instalar dependencias
+### 2. Clone and install dependencies
 
 ```bash
 cd playchrome
 npm --prefix server install
 ```
 
-Esto instala `playwright-core` y `ws` dentro de `server/node_modules/`. No necesita `sudo`.
+This installs `playwright-core` and `ws` inside `server/node_modules/`. No `sudo` needed.
 
-### 3. Cargar la extensión en Chrome
+### 3. Load the extension in Chrome
 
-1. Abre `chrome://extensions/` en Chrome
-2. Activa **"Developer mode"** (toggle en esquina superior derecha)
+1. Open `chrome://extensions/` in Chrome
+2. Enable **"Developer mode"** (toggle in top right corner)
 3. Click **"Load unpacked"**
-4. Selecciona la carpeta `playchrome` (la raíz del proyecto)
-5. Verás la tarjeta **PlayChrome** en la lista de extensiones
-6. Fíjala en la barra de herramientas (click en el icono de puzzle → pin PlayChrome)
+4. Select the `playchrome` folder (project root)
+5. You'll see the **PlayChrome** card in the extensions list
+6. Pin it to the toolbar (click the puzzle icon → pin PlayChrome)
 
-> ⚠️ La extensión usa `sidePanel` API (Chrome 114+). Si el icono no abre el sidepanel, verifica que estés en Chrome 114+ y reinicia Chrome.
+> ⚠️ The extension uses the `sidePanel` API (Chrome 114+). If the icon doesn't open the sidepanel, verify you're on Chrome 114+ and restart Chrome.
 
-## Cómo usar
+## How to use
 
-### Uso rápido (recomendado)
+### Quick usage (recommended)
 
 ```bash
-# 1. Listar perfiles disponibles
+# 1. List available profiles
 node server/index.js --os mac --profiles
 
-# 2. Iniciar servidor + Chrome con tu perfil (todo en uno)
+# 2. Start server + Chrome with your profile (all in one)
 node server/index.js --os mac --profile "Profile 1"
 ```
 
-El servidor lanza Chrome automáticamente, se conecta via CDP y muestra solo la consola en vivo.
+The server launches Chrome automatically, connects via CDP, and shows only the live console.
 
-### Uso manual (server + Chrome por separado)
+### Manual usage (server + Chrome separately)
 
 ```bash
-# 1. Arrancar el servidor
+# 1. Start the server
 node server/index.js
 
-# 2. Copia el comando que imprime el servidor para tu perfil
-#    y ejecútalo en otra terminal:
+# 2. Copy the command the server prints for your profile
+#    and run it in another terminal:
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
   --remote-debugging-port=9222 \
   --remote-allow-origins="*" \
@@ -83,65 +83,65 @@ node server/index.js
   --no-first-run \
   about:blank
 
-> Chrome 149+ **requiere** un `--user-data-dir` no-default para habilitar CDP.
-> El servidor crea `~/.playchrome` con symlinks a tus perfiles reales.
+> Chrome 149+ **requires** a non-default `--user-data-dir` to enable CDP.
+> The server creates `~/.playchrome` with symlinks to your real profiles.
 ```
 
-### 3. Conectar la extensión
+### 3. Connect the extension
 
-- Navega a la página que quieras manipular
-- Click en el icono de PlayChrome en la barra de extensiones
+- Navigate to the page you want to manipulate
+- Click the PlayChrome icon in the extensions toolbar
 - Click **Connect**
-- Escribe código Playwright en las celdas del notebook
+- Write Playwright code in the notebook cells
 
-### Variables disponibles en las celdas
+### Variables available in cells
 
-| Variable | Descripción |
+| Variable | Description |
 |----------|-------------|
-| `page` | Página activa de Playwright (`Page` object) |
-| `browser` | Instancia del navegador (`Browser` object) |
+| `page` | Active Playwright page (`Page` object) |
+| `browser` | Browser instance (`Browser` object) |
 
-### Ejemplos
+### Examples
 
 ```javascript
-// Navegar y obtener título
+// Navigate and get title
 await page.goto('https://example.com');
 return await page.title();
 
-// Extraer texto
+// Extract text
 return await page.evaluate(() => document.body.innerText);
 
-// Click en un elemento
+// Click an element
 await page.locator('button.submit').click();
 
-// Capturar screenshot (devuelve base64)
+// Take screenshot (returns base64)
 return await page.screenshot({ encoding: 'base64' });
 ```
 
-## Atajos de teclado
+## Keyboard shortcuts
 
-| Atajo | Acción |
-|-------|--------|
-| `Ctrl+Enter` | Ejecutar celda |
-| `Shift+Enter` | Ejecutar y crear nueva celda |
-| `Ctrl+Shift+Enter` | Crear nueva celda |
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Enter` | Execute cell |
+| `Shift+Enter` | Execute and create new cell |
+| `Ctrl+Shift+Enter` | Create new cell |
 
-## Flags del servidor
+## Server flags
 
-| Flag | Ejemplo | Descripción |
+| Flag | Example | Description |
 |------|---------|-------------|
-| `--os <sistema>` | `--os mac` | Sistema operativo: `mac`, `linux`, `win` |
-| `--profile <dir>` | `--profile "Profile 1"` | Inicia servidor + Chrome con ese perfil (modo silencioso) |
-| `--profiles` | `--profiles` | Lista perfiles y comandos, no inicia el servidor |
+| `--os <system>` | `--os mac` | Operating system: `mac`, `linux`, `win` |
+| `--profile <dir>` | `--profile "Profile 1"` | Starts server + Chrome with that profile (silent mode) |
+| `--profiles` | `--profiles` | Lists profiles and commands, does not start the server |
 
-## Variables de entorno
+## Environment variables
 
-| Variable | Default | Descripción |
+| Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `3000` | Puerto del servidor WebSocket |
-| `CDP_PORT` | `9222` | Puerto CDP de Chrome |
+| `PORT` | `3000` | WebSocket server port |
+| `CDP_PORT` | `9222` | Chrome CDP port |
 
-## Arquitectura
+## Architecture
 
 ```
 ┌──────────────────────┐     WebSocket      ┌──────────────────────┐
@@ -167,20 +167,20 @@ return await page.screenshot({ encoding: 'base64' });
                                              └──────────────────┘
 ```
 
-Para documentación detallada, ver [`docs/`](./docs/).
+For detailed documentation, see [`docs/`](./docs/).
 
-## Limitaciones
+## Limitations
 
-- **Sistema**: desarrollado y probado en macOS. Linux requiere cambiar `CHROME_PATH` y `CHROME_DIR` en `server/index.js` (ver [docs/AI.md](./docs/AI.md#soportar-linux))
-- **Windows**: no soportado actualmente (rutas hardcodeadas a macOS)
-- **Chrome 149+**: requiere `--remote-debugging-port` y `--user-data-dir` no-default
-- **Un solo servidor**: una instancia del servidor maneja todas las conexiones WebSocket
-- **Código corre en Node.js**: las celdas se ejecutan en el servidor (no en la página). Usar `page.evaluate()` para código en contexto de página
-- **Sin `unsafe-eval`**: se usa `new Function()` en el servidor (no en la extensión), compatible con MV3
+- **System**: developed and tested on macOS. Linux requires changing `CHROME_PATH` and `CHROME_DIR` in `server/index.js` (see [docs/AI.md](./docs/AI.md#soportar-linux))
+- **Windows**: not currently supported (hardcoded macOS paths)
+- **Chrome 149+**: requires `--remote-debugging-port` and non-default `--user-data-dir`
+- **Single server**: one server instance handles all WebSocket connections
+- **Code runs in Node.js**: cells execute on the server (not on the page). Use `page.evaluate()` for page-context code
+- **No `unsafe-eval`**: uses `new Function()` on the server (not in the extension), compatible with MV3
 
-## Documentación
+## Documentation
 
-| Documento | Descripción |
-|-----------|-------------|
-| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Arquitectura detallada del proyecto |
-| [docs/AI.md](./docs/AI.md) | Documentación para que una IA entienda y manipule el proyecto |
+| Document | Description |
+|----------|-------------|
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Detailed project architecture |
+| [docs/AI.md](./docs/AI.md) | Documentation for AI agents to understand and modify the project |
