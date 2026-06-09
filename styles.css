@@ -29,9 +29,66 @@ body {
 }
 
 #logo {
+  position: relative;
   font-weight: 600;
   font-size: 14px;
   color: #4ec9b0;
+  cursor: help;
+  user-select: none;
+}
+
+.logo-info {
+  font-size: 11px;
+  opacity: 0.6;
+  vertical-align: super;
+}
+
+.logo-popover {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 8px;
+  background: #1a1a2e;
+  border: 1px solid #4ec9b0;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 400;
+  color: #d4d4d4;
+  line-height: 1.5;
+  z-index: 200;
+  min-width: 300px;
+  max-width: 360px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  white-space: normal;
+  pointer-events: none;
+}
+
+#logo:hover .logo-popover,
+#logo:focus-within .logo-popover {
+  display: block;
+}
+
+.logo-popover code {
+  color: #4ec9b0;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  background: #252526;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.popover-title {
+  color: #4ec9b0;
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.popover-subtitle {
+  color: #888;
+  margin-top: 4px;
 }
 
 #status-badge {

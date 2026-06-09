@@ -11,7 +11,14 @@
 <body>
   <div id="app">
     <div id="header">
-      <span id="logo">▶ PlayChrome</span>
+      <span id="logo" tabindex="0">▶ PlayChrome <span class="logo-info">ⓘ</span>
+        <div class="logo-popover">
+          <div class="popover-title">globals available in every cell</div>
+          <code>page</code>, <code>browser</code> — created when connecting to Chrome via Playwright <code>connectOverCDP</code><br><br>
+          <code>page</code> → the active Chrome tab (Playwright <strong>Page</strong>)<br>
+          <code>browser</code> → Playwright <strong>BrowserContext</strong>
+        </div>
+      </span>
       <span id="status-badge" class="status-disconnected">disconnected</span>
     </div>
 

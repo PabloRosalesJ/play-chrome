@@ -233,12 +233,14 @@ async function evaluate(code) {
     `)
     const raw = await fn(activePage, browser)
     await new Promise(r => setTimeout(r, CONSOLE_DELAY))
+    const afterKeys = Object.keys(globalThis)
+    const userGlobals = afterKeys.filter(k => !baselineGlobals.has(k))
     let value = undefined
     if (raw !== undefined) {
       try { value = JSON.parse(JSON.stringify(raw, (k, v) => typeof v === 'function' ? undefined : v)) } catch { value = String(raw) }
     }
     const allLines = [...lines, ...serverLines]
-    return { value, console: allLines }
+    return { value, console: allLines, globals: userGlobals }
   } finally {
     if (consoleHandler) activePage.off('console', consoleHandler)
     console.log = origLog
@@ -313,6 +315,8 @@ wss.on('connection', (ws) => {
   ws.on('error', () => { wsClients.delete(ws) })
 })
 
+const baselineGlobals = new Set(Object.keys(globalThis))
+
 process.on('exit', () => {
   if (chromeProcess) { try { chromeProcess.kill('SIGTERM') } catch {} }
   if (browser) { try { browser.close() } catch {} }
@@ -321,7 +325,7 @@ process.on('exit', () => {
 const exitSignals = ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK']
 for (const sig of exitSignals) {
   process.on(sig, () => {
-    console.log('\nShutting down...')
+    console.log('\nBye...')
     if (chromeProcess) { try { chromeProcess.kill('SIGTERM') } catch {} }
     if (browser) { try { browser.close() } catch {} }
     try { execSync('kill $(lsof -t -i :' + PORT + ') 2>/dev/null', { stdio: 'ignore' }) } catch {}

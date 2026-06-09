@@ -52,6 +52,8 @@ playchrome/
 - WebSocket server HTTP en puerto `PORT` (default 3000)
 - Conexión CDP a `http://127.0.0.1:CDP_PORT` (default 9222)
 - Evaluación de código via `new Function('page', 'browser', 'return (async () => { ... })()')`
+- `page` y `browser` son variables globales disponibles en toda celda. `page` = pestaña activa, `browser` = BrowserContext.
+- `prepareUserCode()` remueve `let/const/var/function/class` del inicio de línea para que las variables persistan como globales entre celdas (tipo Jupyter).
 - NO usa `eval()` — usa `new Function()` que es menos restrictivo
 - Console.log de página capturado via `page.on('console')`
 - Console.log de servidor capturado via override temporal de `console.log`

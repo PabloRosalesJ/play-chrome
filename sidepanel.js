@@ -5,6 +5,7 @@ const evalPending = new Map()
 let evalRequestId = 0
 let autocompleteTimer = null
 let lastServerUrl = 'ws://127.0.0.1:3000'
+let userGlobals = []
 
 document.addEventListener('DOMContentLoaded', init)
 
@@ -26,6 +27,15 @@ function bindToolbar() {
   document.getElementById('server-url').addEventListener('change', (e) => {
     lastServerUrl = e.target.value.trim()
     localStorage.setItem('playchrome_server_url', lastServerUrl)
+  })
+}
+
+function renumberCells() {
+  const cells = getAllCells()
+  cells.forEach((cell, i) => {
+    const el = document.getElementById(cell.id)
+    const label = el?.querySelector('.cell-label')
+    if (label) label.textContent = 'cell ' + (i + 1)
   })
 }
 
@@ -147,6 +157,11 @@ function handleServerMessage(msg) {
       showToast('Connected · ' + (msg.pages?.length || 0) + ' pages available')
       break
     case 'RESULT':
+      if (msg.result?.globals) {
+        const set = new Set(userGlobals)
+        for (const g of msg.result.globals) set.add(g)
+        userGlobals = [...set]
+      }
       resolvePending(msg)
       break
     case 'ERROR':
@@ -285,6 +300,7 @@ function restoreCells() {
   for (const cell of cells) {
     createCellUI(cell)
   }
+  renumberCells()
 }
 
 function addNewCell() {
@@ -311,7 +327,9 @@ function createCellUI(cell) {
 
   const label = document.createElement('span')
   label.className = 'cell-label'
-  label.textContent = 'cell ' + cell.id.replace('cell-', '')
+  const cells = getAllCells()
+  const idx = cells.indexOf(cell) + 1
+  label.textContent = 'cell ' + idx
 
   const actions = document.createElement('div')
   actions.className = 'cell-actions'
@@ -341,6 +359,7 @@ function createCellUI(cell) {
       cm.toTextArea()
       codeMirrorInstances.delete(cell.id)
     }
+    renumberCells()
   })
 
   actions.appendChild(runBtn)
@@ -410,6 +429,7 @@ function createCellUI(cell) {
 
 function makeHint() {
   const hints = [
+    ...userGlobals,
     'page', 'browser',
     'page.goto', 'page.locator', 'page.getByRole', 'page.getByText', 'page.getByLabel',
     'page.getByPlaceholder', 'page.getByAltText', 'page.getByTitle', 'page.getByTestId',
