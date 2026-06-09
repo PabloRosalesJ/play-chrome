@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "PlayChrome",
+  "version": "2.0.0",
+  "description": "Notebook para manipular el DOM con Playwright real via WebSocket",
+  "permissions": [
+    "sidePanel",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_title": "PlayChrome"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*"
+  }
+}

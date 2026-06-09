@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PlayChrome</title>
+  <link rel="stylesheet" href="vendor/codemirror/codemirror.min.css">
+  <link rel="stylesheet" href="vendor/codemirror/addon/hint/show-hint.min.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <div id="header">
+      <span id="logo">▶ PlayChrome</span>
+      <span id="status-badge" class="status-disconnected">disconnected</span>
+    </div>
+
+    <div id="toolbar">
+      <input id="server-url" type="text" value="ws://127.0.0.1:3000" placeholder="Server URL" title="PlayChrome Server URL">
+      <button id="btn-connect" title="Connect to PlayChrome server">🔌 Connect</button>
+      <select id="page-selector" title="Select page/tab">
+        <option value="">— no page —</option>
+      </select>
+      <button id="btn-new-cell" title="New cell (Ctrl+Shift+Enter)">+ Cell</button>
+      <button id="btn-run-all" title="Run all cells">▶ All</button>
+      <button id="btn-clear" title="Clear all cells">🗑 Clear</button>
+    </div>
+
+    <div id="chrome-launcher" style="display:none;padding:8px;border-bottom:1px solid #333;background:#1a1a2e">
+      <div style="margin-bottom:4px;font-size:12px;color:#aaa">
+        Chrome no está disponible en el puerto de depuración.
+        Ciérralo y relánzalo con el siguiente comando desde la terminal:
+      </div>
+      <div id="launch-instructions" style="padding:6px;font-size:11px;background:#000;border-radius:4px;color:#4ec9b0;white-space:pre-wrap;word-break:break-all;line-height:1.5"></div>
+    </div>
+
+    <div id="cells-container"></div>
+
+    <div id="footer">
+      <span class="shortcut-hint">Ctrl+Enter: Run | Shift+Enter: Run + New | Ctrl+Shift+Enter: New cell</span>
+    </div>
+  </div>
+
+  <script src="vendor/codemirror/codemirror.min.js"></script>
+  <script src="vendor/codemirror/mode/javascript/javascript.min.js"></script>
+  <script src="vendor/codemirror/addon/hint/show-hint.min.js"></script>
+  <script src="vendor/codemirror/addon/hint/javascript-hint.min.js"></script>
+  <script src="lib/notebook-core.js"></script>
+  <script src="sidepanel.js"></script>
+</body>
+</html>
