@@ -1,7 +1,7 @@
 const http = require('http')
 const fs = require('fs')
 const path = require('path')
-const { spawn } = require('child_process')
+const { spawn, execSync } = require('child_process')
 const net = require('net')
 const { WebSocketServer } = require('ws')
 const { chromium } = require('playwright-core')
@@ -205,6 +205,13 @@ async function selectPage(index) {
   activePage = pages[index]
 }
 
+function prepareUserCode(code) {
+  return code
+    .replace(/^\s*(?:let|const|var)\s+/gm, '')
+    .replace(/^\s*function\s+(\w+)\s*/gm, '$1 = function ')
+    .replace(/^\s*class\s+(\w+)\s*/gm, '$1 = class ')
+}
+
 async function evaluate(code) {
   if (!activePage) throw new Error('No active page')
   const lines = []
@@ -218,9 +225,10 @@ async function evaluate(code) {
   console.warn = (...args) => { serverLines.push('[warn] ' + args.join(' ')); origWarn(...args) }
   console.error = (...args) => { serverLines.push('[error] ' + args.join(' ')); origError(...args) }
   try {
+    const prepared = prepareUserCode(code)
     const fn = new Function('page', 'browser', `
       return (async () => {
-        ${code}
+        ${prepared}
       })()
     `)
     const raw = await fn(activePage, browser)
@@ -306,9 +314,20 @@ wss.on('connection', (ws) => {
 })
 
 process.on('exit', () => {
-  if (chromeProcess) { try { chromeProcess.kill() } catch {} }
+  if (chromeProcess) { try { chromeProcess.kill('SIGTERM') } catch {} }
   if (browser) { try { browser.close() } catch {} }
 })
+
+const exitSignals = ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK']
+for (const sig of exitSignals) {
+  process.on(sig, () => {
+    console.log('\nShutting down...')
+    if (chromeProcess) { try { chromeProcess.kill('SIGTERM') } catch {} }
+    if (browser) { try { browser.close() } catch {} }
+    try { execSync('kill $(lsof -t -i :' + PORT + ') 2>/dev/null', { stdio: 'ignore' }) } catch {}
+    process.exit(0)
+  })
+}
 
 function printLiveConsole() {
   console.log('')
