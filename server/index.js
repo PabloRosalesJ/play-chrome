@@ -1,6 +1,8 @@
 const http = require('http')
 const fs = require('fs')
 const path = require('path')
+const { spawn } = require('child_process')
+const net = require('net')
 const { WebSocketServer } = require('ws')
 const { chromium } = require('playwright-core')
 
@@ -9,16 +11,58 @@ const CDP_PORT = parseInt(process.env.CDP_PORT || '9222', 10)
 const CONSOLE_DELAY = 80
 const CDP_TIMEOUT = 8000
 
-const CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-const CHROME_DIR = path.join(process.env.HOME || '', 'Library', 'Application Support', 'Google', 'Chrome')
-const PLAYCHROME_DIR = path.join(process.env.HOME || '', '.playchrome')
+const OS_CONFIGS = {
+  mac: {
+    chromePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    chromeDir: path.join(process.env.HOME || '', 'Library', 'Application Support', 'Google', 'Chrome')
+  },
+  linux: {
+    chromePath: '/usr/bin/google-chrome',
+    chromeDir: path.join(process.env.HOME || '', '.config', 'google-chrome')
+  },
+  win: {
+    chromePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    chromeDir: path.join(process.env.HOME || process.env.USERPROFILE || '', 'AppData', 'Local', 'Google', 'Chrome', 'User Data')
+  }
+}
+
+function parseArgs() {
+  const args = process.argv.slice(2)
+  let os = 'mac'
+  let profile = null
+  let profilesOnly = false
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--os' && i + 1 < args.length) os = args[++i]
+    if (args[i] === '--profile' && i + 1 < args.length) profile = args[++i]
+    if (args[i] === '--profiles') profilesOnly = true
+  }
+  if (!OS_CONFIGS[os]) {
+    console.error('Unsupported OS: ' + os + '. Supported: mac, linux, win')
+    process.exit(1)
+  }
+  return { os, profile, profilesOnly, config: OS_CONFIGS[os] }
+}
+
+const CLI = parseArgs()
+const CHROME_PATH = CLI.config.chromePath
+const CHROME_DIR = CLI.config.chromeDir
+const PLAYCHROME_DIR = path.join(process.env.HOME || process.env.USERPROFILE || '/tmp', '.playchrome')
 
 let browser = null
 let activePage = null
+let chromeProcess = null
 const wsClients = new Set()
 
 function cleanError(msg) {
   return String(msg).replace(/\u001b\[[0-9;]*m/g, '').trim()
+}
+
+function isPortOpen(port) {
+  return new Promise(resolve => {
+    const sock = net.createConnection(port, '127.0.0.1')
+    sock.on('connect', () => { sock.destroy(); resolve(true) })
+    sock.on('error', () => resolve(false))
+  })
 }
 
 function getProfiles() {
@@ -75,6 +119,40 @@ function getChromeCommand(profileDir) {
   return lines.join(' \\\n')
 }
 
+function launchChrome(profileDir) {
+  return new Promise((resolve, reject) => {
+    if (!fs.existsSync(CHROME_PATH)) {
+      reject(new Error('Chrome not found at ' + CHROME_PATH))
+      return
+    }
+    const args = [
+      `--remote-debugging-port=${CDP_PORT}`,
+      '--remote-allow-origins=*',
+      `--user-data-dir=${PLAYCHROME_DIR}`,
+      `--profile-directory=${profileDir}`,
+      '--no-first-run',
+      'about:blank'
+    ]
+    const proc = spawn(CHROME_PATH, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    chromeProcess = proc
+    proc.stderr.on('data', () => {})
+    proc.on('error', (err) => { chromeProcess = null; reject(err) })
+    proc.on('exit', () => { chromeProcess = null })
+
+    let elapsed = 0
+    const poll = setInterval(async () => {
+      elapsed += 300
+      if (await isPortOpen(CDP_PORT)) {
+        clearInterval(poll)
+        resolve()
+      } else if (elapsed >= 10000) {
+        clearInterval(poll)
+        reject(new Error('Chrome launched but CDP port ' + CDP_PORT + ' not available within 10s'))
+      }
+    }, 300)
+  })
+}
+
 async function connectToChrome() {
   if (browser) {
     try { await browser.close() } catch {}
@@ -84,7 +162,7 @@ async function connectToChrome() {
   const cdpUrl = `http://127.0.0.1:${CDP_PORT}`
   const connectPromise = chromium.connectOverCDP(cdpUrl)
   const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error(`Chrome CDP not available on port ${CDP_PORT}`)), CDP_TIMEOUT))
+    setTimeout(() => reject(new Error('Chrome CDP not available on port ' + CDP_PORT)), CDP_TIMEOUT))
   browser = await Promise.race([connectPromise, timeoutPromise])
   const contexts = browser.contexts()
   if (!contexts || contexts.length === 0) {
@@ -130,7 +208,7 @@ async function selectPage(index) {
 async function evaluate(code) {
   if (!activePage) throw new Error('No active page')
   const lines = []
-  const consoleHandler = (msg) => lines.push(`[${msg.type()}] ${msg.text()}`)
+  const consoleHandler = (msg) => lines.push('[' + msg.type() + '] ' + msg.text())
   activePage.on('console', consoleHandler)
   const origLog = console.log
   const origWarn = console.warn
@@ -228,28 +306,94 @@ wss.on('connection', (ws) => {
 })
 
 process.on('exit', () => {
+  if (chromeProcess) { try { chromeProcess.kill() } catch {} }
   if (browser) { try { browser.close() } catch {} }
 })
 
-initPlayChromeDir()
-const profiles = getProfiles()
-
-server.listen(PORT, () => {
-  console.log(`PlayChrome server on ws://127.0.0.1:${PORT}`)
-  console.log(`Chrome CDP: port ${CDP_PORT}, profile dir: ${PLAYCHROME_DIR}`)
+function printLiveConsole() {
   console.log('')
-  if (profiles.length === 0) {
-    console.log('WARNING: No Chrome profiles found at ' + CHROME_DIR)
-  } else {
-    console.log('Available profiles:')
+  console.log('##'.repeat(35))
+  console.log('                     LIVE CONSOLE')
+  console.log('##'.repeat(35))
+}
+
+async function main() {
+  initPlayChromeDir()
+
+  if (CLI.profilesOnly) {
+    const profiles = getProfiles()
+    if (profiles.length === 0) {
+      console.log('No Chrome profiles found at ' + CHROME_DIR)
+      process.exit(1)
+    }
+    console.log('Available profiles: \n')
+    console.log('PROFILE \t ACCOUNT NAME')
     for (const p of profiles) {
-      console.log(`  ${p.dir.padEnd(12)} → ${p.name}`)
+      const line = `"${p.dir}"` + (p.name !== p.dir ? '\t(' + p.name + ')' : '')
+      console.log('  ' + line)
     }
     console.log('')
-    console.log('Launch Chrome with one of these commands:')
-    for (const p of profiles) {
-      console.log('')
-      console.log(getChromeCommand(p.dir))
-    }
+    console.log('Launch command (replace {PROFILE} with the desired profile dir):')
+    console.log('')
+    console.log(getChromeCommand('{PROFILE}'))
+    process.exit(0)
   }
-})
+
+  if (CLI.profile) {
+    const profiles = getProfiles()
+    const match = profiles.find(p => p.dir === CLI.profile)
+    if (!match) {
+      console.error('Profile "' + CLI.profile + '" not found. Use --profiles to list available profiles.')
+      process.exit(1)
+    }
+    if (!fs.existsSync(CHROME_PATH)) {
+      console.error('Chrome not found at ' + CHROME_PATH + '. Check --os value.')
+      process.exit(1)
+    }
+    if (!(await isPortOpen(CDP_PORT))) {
+      console.log('Launching Chrome with profile "' + CLI.profile + '"...')
+      try {
+        await launchChrome(CLI.profile)
+      } catch (err) {
+        console.error('Failed to launch Chrome:', err.message)
+        process.exit(1)
+      }
+    }
+    try {
+      await connectToChrome()
+    } catch (err) {
+      console.error('Failed to connect to Chrome:', err.message)
+      process.exit(1)
+    }
+
+    server.listen(PORT, () => {
+      console.log('PlayChrome server on ws://127.0.0.1:' + PORT)
+      console.log('Connected to Chrome profile: ' + match.name + ' (' + CLI.profile + ')')
+      printLiveConsole()
+    })
+    return
+  }
+
+  const profiles = getProfiles()
+  server.listen(PORT, () => {
+    console.log('PlayChrome server on ws://127.0.0.1:' + PORT)
+    console.log('Chrome CDP: port ' + CDP_PORT + ', profile dir: ' + PLAYCHROME_DIR)
+    console.log('')
+    if (profiles.length === 0) {
+      console.log('WARNING: No Chrome profiles found at ' + CHROME_DIR)
+    } else {
+      console.log('Available profiles:')
+      for (const p of profiles) {
+        const line = p.dir + (p.name !== p.dir ? '  (' + p.name + ')' : '')
+        console.log('  ' + line)
+      }
+      console.log('')
+      console.log('Launch command (replace {PROFILE} with the desired profile dir):')
+      console.log('')
+      console.log(getChromeCommand('{PROFILE}'))
+    }
+    printLiveConsole()
+  })
+}
+
+main().catch(err => { console.error(err); process.exit(1) })
