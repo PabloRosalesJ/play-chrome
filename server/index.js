@@ -277,6 +277,11 @@ async function handleMessage(ws, msg) {
         ws.send(JSON.stringify({ type: 'PROFILES', id: msg.id, profiles }))
         break
       }
+      case 'RESET': {
+        baselineGlobals = new Set(Object.keys(globalThis))
+        ws.send(JSON.stringify({ type: 'RESETTED', id: msg.id }))
+        break
+      }
       case 'PING': {
         ws.send(JSON.stringify({ type: 'PONG', id: msg.id }))
         break
@@ -315,7 +320,7 @@ wss.on('connection', (ws) => {
   ws.on('error', () => { wsClients.delete(ws) })
 })
 
-const baselineGlobals = new Set(Object.keys(globalThis))
+let baselineGlobals = new Set(Object.keys(globalThis))
 
 process.on('exit', () => {
   if (chromeProcess) { try { chromeProcess.kill('SIGTERM') } catch {} }

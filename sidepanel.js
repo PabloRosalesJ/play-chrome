@@ -608,13 +608,20 @@ function clearAll() {
   for (const cell of allCells) {
     const cm = codeMirrorInstances.get(cell.id)
     if (cm) {
-      cm.toTextArea()
+      try { cm.toTextArea() } catch {}
       codeMirrorInstances.delete(cell.id)
     }
   }
   clearAllCells()
-  document.getElementById('cells-container').innerHTML = ''
+  userGlobals = []
+  const container = document.getElementById('cells-container')
+  if (container) container.innerHTML = ''
   addNewCell()
+  renumberCells()
+  showToast('Notebook cleared, globals reset')
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    try { sendToServer({ type: 'RESET', id: 'reset-' + Date.now() }) } catch {}
+  }
 }
 
 function escapeHtml(str) {
