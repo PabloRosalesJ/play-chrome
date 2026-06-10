@@ -1,6 +1,7 @@
 const http = require('http')
 const fs = require('fs')
 const path = require('path')
+const util = require('util')
 const { spawn, execSync } = require('child_process')
 const net = require('net')
 const { WebSocketServer } = require('ws')
@@ -217,13 +218,16 @@ async function evaluate(code) {
   const lines = []
   const consoleHandler = (msg) => lines.push('[' + msg.type() + '] ' + msg.text())
   activePage.on('console', consoleHandler)
+  const formatConsoleArgs = (args) => args.map(a =>
+    typeof a === 'string' ? a : util.inspect(a, { depth: 2, colors: false })
+  ).join(' ')
   const origLog = console.log
   const origWarn = console.warn
   const origError = console.error
   const serverLines = []
-  console.log = (...args) => { serverLines.push('[log] ' + args.join(' ')); origLog(...args) }
-  console.warn = (...args) => { serverLines.push('[warn] ' + args.join(' ')); origWarn(...args) }
-  console.error = (...args) => { serverLines.push('[error] ' + args.join(' ')); origError(...args) }
+  console.log = (...args) => { serverLines.push('[log] ' + formatConsoleArgs(args)); origLog(...args) }
+  console.warn = (...args) => { serverLines.push('[warn] ' + formatConsoleArgs(args)); origWarn(...args) }
+  console.error = (...args) => { serverLines.push('[error] ' + formatConsoleArgs(args)); origError(...args) }
   try {
     const prepared = prepareUserCode(code)
     const fn = new Function('page', 'browser', `
